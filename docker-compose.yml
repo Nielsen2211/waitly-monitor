@@ -1,0 +1,34 @@
+services:
+  waitly-monitor:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+      - TZ=Europe/Copenhagen
+      - PYTHONUNBUFFERED=1
+    networks:
+      - internal
+
+  ntfy:
+    image: binwiederhier/ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      - NTFY_BASE_URL=https://ntfy.rsnielsen.com
+      - NTFY_BEHIND_PROXY=true
+      - NTFY_CACHE_FILE=/var/lib/ntfy/cache.db
+      - NTFY_UPSTREAM_BASE_URL=https://ntfy.sh
+    volumes:
+      - ./data/ntfy:/var/lib/ntfy
+    ports:
+      - "8080:80"
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge

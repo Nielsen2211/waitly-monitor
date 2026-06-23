@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Bolig Monitor</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="apple-touch-icon" href="/static/favicon.svg">
+  <meta name="theme-color" content="#4f7186">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      /* Nordisk palet – fjord-blå primær, salviegrøn, ler-accent, varme neutrale */
+      --purple: #4f7186;          /* primær accent (fjord-blå) */
+      --purple-light: #e4ebf0;
+      --purple-dark: #3b5868;
+      --green: #5f7d5a;           /* online / aktiv (salvie) */
+      --green-bg: #eef2ea;
+      --red: #a8584d;             /* fejl (dæmpet teglrød) */
+      --red-bg: #f6ece9;
+      --clay: #b3724a;            /* ny bolig (ler / terracotta) */
+      --clay-dark: #8f5836;
+      --gray-50: #f5f3ee;         /* varm papir-baggrund */
+      --gray-100: #efece4;
+      --gray-200: #e4dfd5;        /* varm kant */
+      --gray-400: #9b978c;
+      --gray-500: #716e63;
+      --gray-700: #4a4740;
+      --gray-800: #2c2a25;        /* varm blæk */
+      --white: #fdfcfa;
+      --radius: 14px;
+      --shadow: 0 1px 3px rgba(45,40,32,.07), 0 1px 2px rgba(45,40,32,.05);
+      --shadow-md: 0 6px 18px rgba(45,40,32,.07);
+      --shadow-lg: 0 14px 38px rgba(45,40,32,.10);
+      --shadow-purple: 0 5px 14px rgba(79,113,134,.22);
+      --grad-purple: linear-gradient(135deg, #5a7e93 0%, #4f7186 60%, #43627a 100%);
+      --grad-purple-soft: linear-gradient(135deg, #eef2f3 0%, #f5f3ee 100%);
+      --new-soft: linear-gradient(135deg, #f8f0e9 0%, #fbf6f1 100%);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(1100px 440px at 100% -10%, rgba(79,113,134,.05), transparent 60%),
+        radial-gradient(900px 400px at -10% 0%, rgba(179,114,74,.04), transparent 55%),
+        var(--gray-50);
+      background-attachment: fixed;
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+
+    /* ── Globale animationer ─────────────────────────────────────────── */
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes floatIn { from { opacity: 0; transform: translateY(6px) scale(.98); } to { opacity: 1; transform: none; } }
+    @keyframes shimmer { to { background-position: 200% 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .header {
+      background: rgba(255,255,255,.78);
+      backdrop-filter: saturate(180%) blur(12px);
+      -webkit-backdrop-filter: saturate(180%) blur(12px);
+      border-bottom: 1px solid var(--gray-200);
+      padding: 0 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-inner {
+      max-width: 640px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    .header h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      background: var(--grad-purple);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .header h1::before {
+      content: '';
+      width: 9px; height: 9px; border-radius: 3px;
+      background: var(--grad-purple);
+      box-shadow: 0 0 0 4px rgba(124,58,237,.14);
+      -webkit-text-fill-color: initial;
+    }
+    .header-sub {
+      font-size: 12px;
+      color: var(--gray-400);
+    }
+
+    /* ── Main ────────────────────────────────────────────────────────── */
+    .main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 16px;
+      padding-bottom: 100px;
+    }
+
+    /* ── Card ────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    /* ── Status bar ──────────────────────────────────────────────────── */
+    /* ── Status card ─────────────────────────────────────────────────── */
+    .status-card {
+      padding: 16px 18px;
+      margin-bottom: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: background .25s, border-color .25s, box-shadow .25s;
+    }
+    .status-card.is-scanning {
+      background: linear-gradient(135deg, #faf7ff 0%, var(--white) 60%);
+      border-color: var(--purple-light);
+      box-shadow: 0 4px 18px rgba(124,58,237,.12);
+    }
+    .status-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .status-left { flex: 1; min-width: 0; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 13px 5px 11px;
+      border-radius: 999px;
+      background: var(--gray-100);
+      margin-bottom: 11px;
+      transition: background .2s;
+    }
+    .status-pill.ok       { background: var(--green-bg); }
+    .status-pill.error    { background: var(--red-bg); }
+    .status-pill.checking { background: var(--purple-light); }
+
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: var(--gray-400);
+      position: relative;
+    }
+    .dot.ok      { background: var(--green); box-shadow: 0 0 0 3px rgba(95,125,90,.2); }
+    .dot.error   { background: var(--red);   box-shadow: 0 0 0 3px rgba(168,88,77,.2); }
+    .dot.checking{ background: var(--purple); color: var(--purple); }
+    .dot.checking::after {
+      content: ''; position: absolute; inset: -3px;
+      border-radius: 50%; border: 2px solid currentColor;
+      animation: ping 1s ease-out infinite;
+    }
+    @keyframes ping { 0%{transform:scale(.7);opacity:.5} 100%{transform:scale(1.9);opacity:0} }
+
+    .status-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gray-700);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-pill.ok .status-label       { color: var(--green); }
+    .status-pill.error .status-label    { color: var(--red); }
+    .status-pill.checking .status-label { color: var(--purple-dark); }
+
+    .status-meta { display: flex; flex-direction: column; gap: 4px; }
+    .meta-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--gray-500);
+    }
+    .meta-row b { font-weight: 600; color: var(--gray-700); }
+    .meta-ico {
+      width: 13px; height: 13px; flex-shrink: 0;
+      stroke: var(--gray-400); fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .meta-error { color: var(--red); }
+    .meta-error b { color: var(--red); }
+
+    .btn-check {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--grad-purple);
+      color: var(--white);
+      border: none;
+      border-radius: 12px;
+      padding: 11px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow-purple);
+      transition: transform .12s, box-shadow .15s, filter .15s, opacity .15s;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-check:hover  { filter: brightness(1.05); box-shadow: 0 10px 24px rgba(124,58,237,.36); }
+    .btn-check:active { transform: translateY(1px); }
+    .btn-check:disabled { opacity: .9; cursor: not-allowed; box-shadow: none; }
+    .btn-check.loading::before {
+      content: ''; width: 15px; height: 15px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.4);
+      border-top-color: #fff;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Integreret scanning-indikator (vises kun under scan) ────────── */
+    .scan-bar {
+      display: none;
+      height: 4px; border-radius: 4px;
+      background: var(--purple-light);
+      overflow: hidden;
+      margin-top: 14px;
+    }
+    .status-card.is-scanning .scan-bar { display: block; }
+    .scan-bar-fill {
+      height: 100%; width: 38%;
+      border-radius: 4px;
+      background: linear-gradient(90deg, var(--purple), #a78bfa);
+      animation: indeterminate 1.15s ease-in-out infinite;
+    }
+    @keyframes indeterminate {
+      0%   { margin-left: -38%; }
+      100% { margin-left: 100%; }
+    }
+    .scan-note {
+      display: none;
+      font-size: 11.5px; font-weight: 500;
+      color: var(--purple-dark);
+      margin-top: 8px;
+    }
+    .status-card.is-scanning .scan-note { display: block; }
+
+    /* ── Alert banners ───────────────────────────────────────────────── */
+    .alert {
+      border-radius: var(--radius);
+      padding: 13px 16px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      display: none;
+      box-shadow: var(--shadow-md);
+    }
+    .alert.show { display: block; animation: floatIn .35s cubic-bezier(.22,.61,.36,1) both; }
+    .alert-title { font-weight: 800; margin-bottom: 2px; }
+    .alert-green { background: var(--green-bg); border: 1px solid #d8e2d2; border-left: 4px solid var(--green); color: #46603f; }
+    .alert-red   { background: var(--red-bg);   border: 1px solid #ecd6cf; border-left: 4px solid var(--red);   color: #8a463c; }
+
+    /* ── Offers header ───────────────────────────────────────────────── */
+    .offers-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding: 0 2px;
+    }
+    .offers-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--gray-800);
+    }
+    .badge-count {
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    .badge-new {
+      background: var(--clay);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 9px;
+      border-radius: 999px;
+      margin-left: 6px;
+      box-shadow: 0 2px 6px rgba(179,114,74,.28);
+    }
+
+    /* ── Offer card ──────────────────────────────────────────────────── */
+    .offer-card {
+      margin-bottom: 10px;
+      position: relative;
+      overflow: hidden;
+      animation: fadeUp .45s cubic-bezier(.22,.61,.36,1) both;
+      transition: transform .18s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .offer-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--gray-200);
+    }
+    .offer-card:nth-child(1){animation-delay:.02s}.offer-card:nth-child(2){animation-delay:.06s}
+    .offer-card:nth-child(3){animation-delay:.10s}.offer-card:nth-child(4){animation-delay:.14s}
+    .offer-card:nth-child(5){animation-delay:.18s}.offer-card:nth-child(n+6){animation-delay:.22s}
+    .offer-card.is-new {
+      border-color: #ecdcce;
+      background: var(--new-soft);
+    }
+    .offer-card.is-new::before {
+      content: '';
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: 4px; background: var(--clay);
+    }
+    .offer-body { padding: 14px 16px; }
+    .offer-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .offer-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gray-800);
+      line-height: 1.4;
+    }
+    .tag-new {
+      flex-shrink: 0;
+      background: var(--clay);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 999px;
+      letter-spacing: .5px;
+      animation: tagPulse 2.6s ease-out infinite;
+    }
+    @keyframes tagPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(179,114,74,.35); }
+      70%  { box-shadow: 0 0 0 6px rgba(179,114,74,0); }
+      100% { box-shadow: 0 0 0 0 rgba(179,114,74,0); }
+    }
+    .tag-expired {
+      flex-shrink: 0;
+      background: var(--gray-200);
+      color: var(--gray-500);
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: .5px;
+    }
+    .tag-deadline {
+      flex-shrink: 0;
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid #ecd6cf;
+      font-size: 10px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 999px;
+      letter-spacing: .5px;
+    }
+    .offer-card.is-inactive {
+      opacity: 0.55;
+    }
+    .offer-card.is-inactive .offer-title {
+      text-decoration: line-through;
+      color: var(--gray-500);
+    }
+    .offer-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .chip {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 11px;
+      padding: 7px 13px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--gray-800);
+      white-space: nowrap;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1px;
+      box-shadow: 0 1px 2px rgba(17,12,46,.05);
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .chip:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .chip-label {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: var(--gray-400);
+    }
+    .offer-meta {
+      font-size: 12px;
+      color: var(--gray-500);
+      line-height: 1.8;
+    }
+    .offer-meta span { color: var(--gray-700); }
+    .deadline-box {
+      margin-top: 10px;
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    .deadline-box b { color: var(--red); }
+    .deadline-box.deadline-past {
+      background: var(--red-bg);
+      border-color: #ecd6cf;
+      color: var(--red);
+    }
+    .offer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--gray-100);
+    }
+    .offer-seen {
+      font-size: 11px;
+      color: var(--gray-400);
+    }
+    .btn-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--grad-purple);
+      color: var(--white);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 10px;
+      box-shadow: var(--shadow-purple);
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-link:hover  { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(124,58,237,.34); filter: brightness(1.04); }
+    .btn-link:active { transform: translateY(0); }
+
+    /* ── Waitlist card ───────────────────────────────────────────────── */
+    .wl-card {
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      animation: floatIn .4s cubic-bezier(.22,.61,.36,1) both;
+      transition: transform .18s ease, box-shadow .2s ease;
+    }
+    .wl-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+    .wl-position {
+      flex-shrink: 0;
+      text-align: center;
+      min-width: 52px;
+    }
+    .wl-pos-num {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+      background: var(--grad-purple);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .wl-pos-total {
+      font-size: 11px;
+      color: var(--gray-400);
+      margin-top: 2px;
+    }
+    .wl-divider {
+      width: 1px;
+      height: 40px;
+      background: var(--gray-200);
+      flex-shrink: 0;
+    }
+    .wl-info { flex: 1; min-width: 0; }
+    .wl-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-800);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .wl-meta { font-size: 11px; color: var(--gray-500); line-height: 1.6; }
+    .wl-status-active { color: var(--green); font-weight: 600; }
+    .wl-status-inactive { color: var(--gray-400); }
+
+    /* ── Empty state ─────────────────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--gray-400);
+    }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; animation: emptyFloat 3s ease-in-out infinite; }
+    @keyframes emptyFloat { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+    .empty p { font-size: 14px; }
+
+    /* ── Settings FAB ────────────────────────────────────────────────── */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 20px;
+      width: 52px;
+      height: 52px;
+      background: var(--white);
+      border: 1px solid var(--gray-200);
+      border-radius: 50%;
+      box-shadow: 0 4px 12px rgba(0,0,0,.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 22px;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform .15s;
+      z-index: 9;
+    }
+    .fab:active { transform: scale(.92); }
+
+    /* ── Settings modal ──────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 50;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--white);
+      border-radius: 20px 20px 0 0;
+      width: 100%;
+      max-width: 640px;
+      max-height: 92vh;
+      overflow-y: auto;
+      padding: 20px 16px 40px;
+      animation: slideUp .25s ease-out;
+    }
+    @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: var(--gray-200);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+    .modal h2 {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--gray-800);
+    }
+
+    /* ── Form elements ───────────────────────────────────────────────── */
+    .form-section {
+      margin-bottom: 22px;
+    }
+    .form-section-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--gray-400);
+      margin-bottom: 10px;
+    }
+    .form-group { margin-bottom: 10px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--gray-700);
+      margin-bottom: 5px;
+    }
+    input[type=text], input[type=email], input[type=password], input[type=tel], select {
+      width: 100%;
+      border: 1px solid var(--gray-200);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: var(--gray-800);
+      background: var(--white);
+      outline: none;
+      transition: border-color .15s;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus { border-color: var(--purple); }
+    .hint {
+      font-size: 11px;
+      color: var(--gray-400);
+      margin-top: 4px;
+    }
+    .hint a { color: var(--purple); }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .toggle-row input[type=checkbox] { display: none; }
+    .toggle {
+      width: 44px;
+      height: 26px;
+      background: var(--gray-200);
+      border-radius: 999px;
+      position: relative;
+      flex-shrink: 0;
+      transition: background .2s;
+    }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--white);
+      top: 3px;
+      left: 3px;
+      transition: transform .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+    }
+    input[type=checkbox]:checked + .toggle { background: var(--purple); }
+    input[type=checkbox]:checked + .toggle::after { transform: translateX(18px); }
+    .toggle-label { font-size: 13px; font-weight: 500; color: var(--gray-700); }
+    .toggle-sub   { font-size: 11px; color: var(--gray-400); margin-top: 1px; }
+    .sub-section {
+      margin-left: 56px;
+      margin-top: 8px;
+      padding-bottom: 4px;
+    }
+    .sub-section.hidden { display: none; }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 99px;
+      vertical-align: middle;
+      line-height: 1.4;
+    }
+    .status-badge.ok   { background: #dcfce7; color: #166534; }
+    .status-badge.warn { background: #fef9c3; color: #854d0e; }
+    .status-badge.none { background: var(--gray-100); color: var(--gray-400); }
+
+    .email-recipient-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+    .email-recipient-row input {
+      flex: 1;
+      margin-bottom: 0 !important;
+    }
+    .btn-rm-email {
+      flex-shrink: 0;
+      background: none;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      width: 28px;
+      height: 28px;
+      color: var(--gray-400);
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .btn-rm-email:hover { border-color: var(--red); color: var(--red); }
+    .btn-add-email {
+      background: none;
+      border: 1px dashed var(--gray-300);
+      border-radius: 8px;
+      color: var(--purple);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 2px;
+    }
+    .btn-add-email:hover { background: var(--purple-light); }
+    .btn-test-email {
+      background: none;
+      border: 1px solid var(--purple);
+      border-radius: 8px;
+      color: var(--purple);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 14px;
+      cursor: pointer;
+      margin-top: 6px;
+      width: 100%;
+    }
+    .btn-test-email:hover { background: var(--purple-light); }
+    .btn-test-email:disabled { opacity: .5; cursor: not-allowed; }
+
+    .btn-save {
+      width: 100%;
+      background: var(--purple);
+      color: var(--white);
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-save:active { background: var(--purple-dark); }
+    .btn-cancel {
+      width: 100%;
+      background: var(--white);
+      color: var(--gray-700);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 13px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── Saved toast ─────────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--gray-800);
+      color: var(--white);
+      padding: 10px 20px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity .2s, transform .2s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Desktop layout (≥ 768px) ────────────────────────────────────── */
+    @media (min-width: 768px) {
+      .header-inner { max-width: 1280px; }
+
+      .main {
+        max-width: 1280px;
+        padding: 24px 32px 80px;
+      }
+
+      /* To-kolonne grid for tilbud */
+      #offersList {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        align-items: start;
+      }
+      #offersList .offer-card { margin-bottom: 0; }
+      #offersList .empty { grid-column: 1 / -1; }
+
+      /* Ventelister i række */
+      #waitlistCards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 10px;
+      }
+      #waitlistCards .wl-card { margin-bottom: 0; }
+
+      /* Status-kort bredere */
+      .status-card { padding: 18px 22px; }
+
+      /* Settings: slide-in fra højre (sidebar) */
+      .modal-overlay {
+        align-items: stretch;
+        justify-content: flex-end;
+      }
+      .modal {
+        border-radius: 0;
+        height: 100vh;
+        max-height: 100vh;
+        width: 460px;
+        animation: slideRight .25s ease-out;
+        padding: 28px 24px 40px;
+      }
+      .modal-handle { display: none; }
+
+      /* FAB lidt større på desktop */
+      .fab { bottom: 32px; right: 32px; width: 58px; height: 58px; font-size: 24px; }
+
+      /* Chips lidt mere plads */
+      .offer-chips { gap: 8px; }
+    }
+
+    @keyframes slideRight {
+      from { transform: translateX(100%); }
+      to   { transform: translateX(0); }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <h1>Bolig Monitor</h1>
+    <a href="/logout" style="font-size:12px;color:var(--gray-400);text-decoration:none;padding:6px 10px;border-radius:8px;border:1px solid var(--gray-200);">Log ud</a>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Status card -->
+  <div class="card status-card" id="statusCard" style="margin-bottom:12px;">
+    <div class="status-main">
+      <div class="status-left">
+        <span class="status-pill" id="statusPill">
+          <span class="dot" id="statusDot"></span>
+          <span class="status-label" id="statusLabel">Starter…</span>
+        </span>
+        <div class="status-meta">
+          <div class="meta-row" id="lastCheckLine" style="display:none">
+            <svg class="meta-ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            <span>Sidst tjekket <b id="lastCheckVal">–</b></span>
+          </div>
+          <div class="meta-row" id="nextCheckLine" style="display:none">
+            <svg class="meta-ico" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+            <span>Næste tjek <b id="countdown" style="font-variant-numeric:tabular-nums">–</b></span>
+          </div>
+          <div class="meta-row meta-error" id="lastErrorLine" style="display:none">
+            <svg class="meta-ico" viewBox="0 0 24 24" style="stroke:var(--red)"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            <span id="lastErrorVal"></span>
+          </div>
+        </div>
+      </div>
+      <button class="btn-check" id="checkBtn" onclick="runCheck()">Tjek nu</button>
+    </div>
+    <div class="scan-bar"><div class="scan-bar-fill"></div></div>
+    <div class="scan-note" id="scanNote">Scanner Waitly — henter boliger og ventelistepladser…</div>
+  </div>
+
+  <!-- Ventelister -->
+  <div id="waitlistSection" style="display:none;margin-bottom:12px;">
+    <div class="offers-header" style="margin-bottom:8px;">
+      <span class="offers-title">Ventelister</span>
+    </div>
+    <div id="waitlistCards"></div>
+  </div>
+
+  <!-- Alerts -->
+  <div class="alert alert-green" id="alertNew">
+    <div class="alert-title">🏠 Nye tilbud fundet!</div>
+    <div id="alertNewText"></div>
+  </div>
+  <div class="alert alert-red" id="alertErr">
+    <div class="alert-title">Fejl</div>
+    <div id="alertErrText"></div>
+  </div>
+
+  <!-- Offers list -->
+  <div class="offers-header">
+    <span class="offers-title">Tilbud</span>
+    <span id="offersCount" class="badge-count"></span>
+  </div>
+
+  <div id="offersList">
+    <div class="empty">
+      <div class="empty-icon">🏡</div>
+      <p>Ingen tilbud endnu.<br>Klik <b>Tjek nu</b> for at starte.</p>
+    </div>
+  </div>
+
+</main>
+
+<!-- Settings FAB -->
+<button class="fab" onclick="openSettings()" aria-label="Indstillinger">⚙️</button>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Settings modal (bottom sheet) -->
+<div class="modal-overlay" id="modalOverlay" onclick="overlayClick(event)">
+  <div class="modal" id="modal">
+    <div class="modal-handle"></div>
+    <h2>Indstillinger</h2>
+
+    <form id="settingsForm" onsubmit="saveSettings(event)">
+
+      <div class="form-section">
+        <div class="form-section-title">Adgang til denne app</div>
+        <div class="form-group">
+          <label for="cfgAppPassword">Kodeord til appen</label>
+          <input type="password" id="cfgAppPassword" placeholder="Vælg et kodeord (alle brugere deler det)">
+          <p class="hint">Det kodeord du og din kæreste bruger til at logge ind her.</p>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Login – my.waitly.dk <span id="statusWaitly" class="status-badge"></span></div>
+        <div class="form-group">
+          <label for="cfgEmail">E-mailadresse</label>
+          <input type="email" id="cfgEmail" placeholder="din@email.dk" autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="cfgPassword">Adgangskode</label>
+          <input type="password" id="cfgPassword" placeholder="Efterlad tom for at beholde den gemte" autocomplete="current-password">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Automatisk tjek</div>
+        <div class="form-group">
+          <label for="cfgInterval">Tjek interval</label>
+          <select id="cfgInterval">
+            <option value="15">Hvert 15. minut</option>
+            <option value="30">Hvert 30. minut</option>
+            <option value="60">Hver time</option>
+            <option value="120">Hver 2. time</option>
+            <option value="360">Hver 6. time</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Notifikationer</div>
+
+        <!-- ntfy mobile -->
+        <label class="toggle-row" for="cfgNtfyOn">
+          <input type="checkbox" id="cfgNtfyOn" onchange="toggleSection('ntfySection', this.checked)">
+          <span class="toggle"></span>
+          <span>
+            <div class="toggle-label">Mobil-push (selvhostet ntfy)</div>
+            <div class="toggle-sub">Gratis, privat — kører i din Docker</div>
+          </span>
+        </label>
+        <div class="sub-section hidden" id="ntfySection">
+          <div class="form-group">
+            <label for="cfgNtfyTopic">Emne (topic)</label>
+            <input type="text" id="cfgNtfyTopic" placeholder="fx bolig-rasmus-42">
+          </div>
+          <div class="form-group">
+            <label for="cfgNtfyServer">Server-URL (backend)</label>
+            <input type="text" id="cfgNtfyServer" placeholder="http://ntfy">
+            <p class="hint">Lad stå som <b>http://ntfy</b> når du kører i Docker.</p>
+          </div>
+          <div style="background:var(--purple-light);border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;color:var(--purple-dark);">
+            📱 <b>Telefon-appen:</b> Download <a href="https://ntfy.sh" target="_blank" style="color:var(--purple);">ntfy</a> → tryk + → skift server til <b>ntfy.rsnielsen.com</b> → emne = det du har skrevet ovenfor
+          </div>
+          <button type="button" class="btn-test-email" id="btnTestNtfy" onclick="sendTest('ntfy','btnTestNtfy','Send test-push')">Send test-push</button>
+        </div>
+
+        <!-- sms -->
+        <label class="toggle-row" for="cfgSmsOn">
+          <input type="checkbox" id="cfgSmsOn" onchange="toggleSection('smsSection', this.checked)">
+          <span class="toggle"></span>
+          <span>
+            <div class="toggle-label">SMS (Twilio) <span id="statusTwilio" class="status-badge"></span></div>
+            <div class="toggle-sub">Kræver gratis Twilio-konto</div>
+          </span>
+        </label>
+        <div class="sub-section hidden" id="smsSection">
+          <div class="form-group">
+            <label for="cfgPhoneNumber">Dit mobilnummer</label>
+            <input type="tel" id="cfgPhoneNumber" placeholder="+4512345678">
+            <p class="hint">Inkl. landekode — fx +45 for Danmark</p>
+          </div>
+          <div class="form-group">
+            <label for="cfgTwilioSid">Twilio Account SID</label>
+            <input type="text" id="cfgTwilioSid" placeholder="ACxxxxxxxxxxxxxxx">
+          </div>
+          <div class="form-group">
+            <label for="cfgTwilioToken">Twilio Auth Token</label>
+            <input type="password" id="cfgTwilioToken" placeholder="Efterlad tom for at beholde">
+          </div>
+          <div class="form-group">
+            <label for="cfgTwilioFrom">Twilio afsendernummer</label>
+            <input type="text" id="cfgTwilioFrom" placeholder="+1xxxxxxxxxx">
+            <p class="hint">Opret gratis prøvekonto på <a href="https://twilio.com" target="_blank">twilio.com</a> — $15 i gratis kredit</p>
+          </div>
+          <button type="button" class="btn-test-email" id="btnTestSms" onclick="sendTest('sms','btnTestSms','Send test-SMS')">Send test-SMS</button>
+        </div>
+
+        <!-- email -->
+        <label class="toggle-row" for="cfgEmailOn">
+          <input type="checkbox" id="cfgEmailOn" onchange="toggleSection('emailSection', this.checked)">
+          <span class="toggle"></span>
+          <span>
+            <div class="toggle-label">Email (bolig@rsnielsen.com) <span id="statusResend" class="status-badge"></span></div>
+            <div class="toggle-sub">Sender via Resend</div>
+          </span>
+        </label>
+        <div class="sub-section hidden" id="emailSection">
+          <div class="form-group">
+            <label>Resend API-nøgle</label>
+            <input type="password" id="cfgResendApiKey" placeholder="Efterlad tom for at beholde den gemte (re_…)">
+            <p class="hint">Hent fra resend.com → API Keys</p>
+          </div>
+          <div class="form-group">
+            <label>Modtagere</label>
+            <div id="emailRecipients"></div>
+            <button type="button" class="btn-add-email" onclick="addEmailRecipient('')">+ Tilføj modtager</button>
+          </div>
+          <button type="button" class="btn-test-email" id="btnTestEmail" onclick="sendTest('email','btnTestEmail','Send testmail')">Send testmail</button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-save">Gem indstillinger</button>
+      <button type="button" class="btn-cancel" onclick="closeSettings()">Annuller</button>
+    </form>
+  </div>
+</div>
+
+<script>
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  const _MONTHS = {
+    'januar':1,'februar':2,'marts':3,'april':4,'maj':5,'juni':6,
+    'juli':7,'august':8,'september':9,'oktober':10,'november':11,'december':12
+  };
+  function parseDanishNum(str) {
+    if (!str) return null;
+    // "454.739,86 DKK" → 454739.86
+    const n = parseFloat(str.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, ''));
+    return isNaN(n) ? null : n;
+  }
+
+  function roundedPrice(str) {
+    const n = parseDanishNum(str);
+    if (n === null) return str;
+    return Math.round(n / 1000) * 1000 + '';
+  }
+
+  function roundedMonthly(str) {
+    const n = parseDanishNum(str);
+    if (n === null) return str;
+    return Math.round(n / 100) * 100 + '';
+  }
+
+  function fmtDKK(numStr) {
+    const n = parseInt(numStr, 10);
+    return isNaN(n) ? numStr : n.toLocaleString('da-DK') + ' DKK';
+  }
+
+  function floorFromTitle(title) {
+    // Hent det der står efter sidste komma: "st. tv.", "1. th.", "2. tv." osv.
+    const parts = title.split(',');
+    if (parts.length < 2) return '';
+    const last = parts[parts.length - 1].trim();
+    return /^(st|kl|\d+)\./i.test(last) ? last : '';
+  }
+
+  function parseDanishDate(str) {
+    if (!str) return 0;
+    const m = str.match(/(\d+)\.\s+(\w+)\s+(\d{4})/i);
+    if (!m) return 0;
+    const mon = _MONTHS[m[2].toLowerCase()];
+    return mon ? new Date(parseInt(m[3]), mon - 1, parseInt(m[1])).getTime() : 0;
+  }
+
+  function deadlineExpired(str) {
+    if (!str) return false;
+    const m = str.match(/(\d+)\.\s+(\w+)\s+(\d{4})(?:\s+kl[.:]\s*(\d{1,2})[.:](\d{2}))?/i);
+    if (!m) return false;
+    const mon = _MONTHS[m[2].toLowerCase()];
+    if (!mon) return false;
+    const d = new Date(parseInt(m[3]), mon - 1, parseInt(m[1]),
+                       m[4] ? parseInt(m[4]) : 23, m[5] ? parseInt(m[5]) : 59);
+    return d < new Date();
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '–';
+    return new Date(iso).toLocaleString('da-DK', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function toggleSection(id, show) {
+    document.getElementById(id).classList.toggle('hidden', !show);
+  }
+
+  // ── Waitlists ─────────────────────────────────────────────────────────────
+
+  async function loadWaitlists() {
+    const items = await fetch('/api/waitlists').then(r => r.json());
+    const section = document.getElementById('waitlistSection');
+    const cards   = document.getElementById('waitlistCards');
+
+    if (!items.length) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    cards.innerHTML = items.map(w => {
+      const active = w.status && w.status.toLowerCase().includes('aktiv');
+      return `
+        <div class="wl-card">
+          <div class="wl-position">
+            <div class="wl-pos-num">${w.position}</div>
+            <div class="wl-pos-total">af ${w.total}</div>
+          </div>
+          <div class="wl-divider"></div>
+          <div class="wl-info">
+            <div class="wl-name">${w.name}</div>
+            <div class="wl-meta">
+              <span class="${active ? 'wl-status-active' : 'wl-status-inactive'}">${w.status || '–'}</span>
+              ${w.end_date ? ` · Udløber ${w.end_date}` : ''}
+            </div>
+            <div class="wl-meta" style="color:var(--gray-400);font-size:10px;margin-top:2px;">
+              ${w.source} · Opdateret ${fmtDate(w.updated)}
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // ── State & offers ────────────────────────────────────────────────────────
+
+  let _nextCheckAt = null;
+
+  async function loadState() {
+    const s    = await fetch('/api/state').then(r => r.json());
+    const dot  = document.getElementById('statusDot');
+    const lbl  = document.getElementById('statusLabel');
+    const pill = document.getElementById('statusPill');
+
+    let pillState = '';
+    const errLine = document.getElementById('lastErrorLine');
+    if (s.last_status === 'ok') {
+      pillState = 'ok';
+      lbl.textContent = s.new_count > 0 ? `${s.new_count} nye boliger fundet!` : 'Online';
+      errLine.style.display = 'none';
+    } else if (s.last_status === 'error') {
+      pillState = 'error';
+      lbl.textContent = 'Fejl ved seneste tjek';
+      if (s.last_error) {
+        document.getElementById('lastErrorVal').textContent = s.last_error;
+        errLine.style.display = '';
+      }
+    } else {
+      lbl.textContent = 'Starter op…';
+      errLine.style.display = 'none';
+    }
+    dot.className  = 'dot' + (pillState ? ' ' + pillState : '');
+    pill.className = 'status-pill' + (pillState ? ' ' + pillState : '');
+
+    const lastLine = document.getElementById('lastCheckLine');
+    const nextLine = document.getElementById('nextCheckLine');
+
+    if (s.last_check) {
+      document.getElementById('lastCheckVal').textContent = fmtDate(s.last_check);
+      lastLine.style.display = '';
+    }
+
+    if (s.next_check) {
+      _nextCheckAt = new Date(s.next_check);
+      nextLine.style.display = '';
+    }
+  }
+
+  async function loadOffers() {
+    const offers = await fetch('/api/listings').then(r => r.json());
+    const list  = document.getElementById('offersList');
+    const count = document.getElementById('offersCount');
+
+    if (!offers.length) {
+      list.innerHTML = `<div class="empty"><div class="empty-icon">🏡</div>
+        <p>Ingen tilbud endnu.<br>Klik <b>Tjek nu</b> for at starte.</p></div>`;
+      count.innerHTML = '';
+      return;
+    }
+
+    offers.sort((a, b) => {
+      if (a.is_active !== b.is_active) return b.is_active - a.is_active;
+      return parseDanishDate(b.published) - parseDanishDate(a.published);
+    });
+
+    const newN = offers.filter(o => o.is_new && !deadlineExpired(o.deadline) && o.is_active).length;
+    count.innerHTML = `${offers.length} tilbud` +
+      (newN ? `<span class="badge-new">${newN} ny</span>` : '');
+
+    list.innerHTML = offers.map(o => {
+      const isGone      = !o.is_active;
+      const deadlinePast = o.is_active && deadlineExpired(o.deadline);
+      const tag = isGone
+        ? '<span class="tag-expired">UDGÅET</span>'
+        : deadlinePast
+          ? '<span class="tag-deadline">DEADLINE UDLØBET</span>'
+          : o.is_new ? '<span class="tag-new">NY</span>' : '';
+      const details = [
+        o.price           ? `<span class="chip-label">Pris</span>${fmtDKK(roundedPrice(o.price))}` : '',
+        o.recurring_price ? `<span class="chip-label">/md</span>${fmtDKK(roundedMonthly(o.recurring_price))}` : '',
+        o.rooms           ? `<span class="chip-label">Vær.</span>${o.rooms}` : '',
+        o.size            ? `<span class="chip-label">m²</span>${o.size.replace(/\s*m²/i,'').trim()}` : '',
+        (() => { const f = floorFromTitle(o.title) || o.floor || ''; return f ? `<span class="chip-label">Etage</span>${f}` : ''; })(),
+      ].filter(Boolean);
+      return `
+      <div class="card offer-card ${o.is_new && !isGone && !deadlinePast ? 'is-new' : ''} ${isGone ? 'is-inactive' : ''}">
+        <div class="offer-body">
+          <div class="offer-top">
+            <div class="offer-title">${o.title}</div>
+            ${tag}
+          </div>
+          ${details.length ? `<div class="offer-chips">${details.map(d=>`<span class="chip">${d}</span>`).join('')}</div>` : ''}
+          <div class="offer-meta">
+            ${o.association ? `<div>${o.association}</div>` : ''}
+            <div>Liste: <span>${o.list_type || '–'}</span></div>
+            <div>Adresse: <span>${o.address || '–'}</span></div>
+          </div>
+          ${o.deadline ? `<div class="deadline-box ${deadlinePast ? 'deadline-past' : ''}">🗓 Deadline: <b>${o.deadline}</b>${deadlinePast ? ' – udløbet' : ''}</div>` : ''}
+          <div class="offer-footer">
+            <span class="offer-seen">Opdaget ${fmtDate(o.first_seen)}</span>
+            <a class="btn-link" href="${o.url}" target="_blank" rel="noopener">Se bolig →</a>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── Check now ─────────────────────────────────────────────────────────────
+
+  async function runCheck() {
+    const btn  = document.getElementById('checkBtn');
+    const dot  = document.getElementById('statusDot');
+    const lbl  = document.getElementById('statusLabel');
+    const pill = document.getElementById('statusPill');
+    const card = document.getElementById('statusCard');
+    btn.disabled = true;
+    btn.classList.add('loading');
+    btn.textContent = 'Tjekker…';
+    card.classList.add('is-scanning');
+    dot.className  = 'dot checking';
+    pill.className = 'status-pill checking';
+    lbl.textContent = 'Scanner Waitly…';
+
+    document.getElementById('alertNew').classList.remove('show');
+    document.getElementById('alertErr').classList.remove('show');
+
+    try {
+      const data = await fetch('/api/check', { method: 'POST' }).then(r => r.json());
+      if (data.error) {
+        document.getElementById('alertErr').classList.add('show');
+        document.getElementById('alertErrText').textContent = data.error;
+      } else if (data.new_count > 0) {
+        document.getElementById('alertNew').classList.add('show');
+        document.getElementById('alertNewText').textContent =
+          `${data.new_count} nye boliger ud af ${data.total} i alt.`;
+      } else {
+        showToast('Ingen nye boliger – alt er opdateret ✓');
+      }
+    } catch {
+      document.getElementById('alertErr').classList.add('show');
+      document.getElementById('alertErrText').textContent = 'Kunne ikke kontakte serveren.';
+    }
+
+    await Promise.all([loadState(), loadOffers(), loadWaitlists()]);
+    card.classList.remove('is-scanning');
+    btn.classList.remove('loading');
+    btn.disabled = false;
+    btn.textContent = 'Tjek nu';
+  }
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+
+  function setBadge(id, state, label) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.className = 'status-badge ' + state;
+    el.textContent = label;
+  }
+
+  function addEmailRecipient(value) {
+    const row = document.createElement('div');
+    row.className = 'email-recipient-row';
+    row.innerHTML =
+      `<input type="email" placeholder="modtager@example.com" value="${value}">` +
+      `<button type="button" class="btn-rm-email" title="Fjern" onclick="this.closest('.email-recipient-row').remove()">×</button>`;
+    document.getElementById('emailRecipients').appendChild(row);
+  }
+
+  async function openSettings() {
+    const cfg = await fetch('/api/config').then(r => r.json());
+    document.getElementById('cfgAppPassword').value = '';
+    document.getElementById('cfgEmail').value    = cfg.email || '';
+    document.getElementById('cfgPassword').value = '';
+    document.getElementById('cfgInterval').value = String(cfg.check_interval || 60);
+
+    // Waitly status
+    if (cfg.email && cfg.has_password) {
+      setBadge('statusWaitly', 'ok', '✓ Login sat op');
+    } else if (cfg.email) {
+      setBadge('statusWaitly', 'warn', '⚠ Ingen adgangskode');
+    } else {
+      setBadge('statusWaitly', 'none', 'Ikke konfigureret');
+    }
+
+    const n = cfg.notifications || {};
+    const ntfyOn = !!n.ntfy_topic;
+    document.getElementById('cfgNtfyOn').checked    = ntfyOn;
+    document.getElementById('cfgNtfyTopic').value   = n.ntfy_topic  || '';
+    document.getElementById('cfgNtfyServer').value  = n.ntfy_server || 'http://ntfy';
+    toggleSection('ntfySection', ntfyOn);
+
+    const smsOn = !!n.sms_enabled;
+    document.getElementById('cfgSmsOn').checked      = smsOn;
+    document.getElementById('cfgPhoneNumber').value  = n.phone_number || '';
+    document.getElementById('cfgTwilioSid').value    = n.twilio_sid || '';
+    document.getElementById('cfgTwilioToken').value  = '';
+    document.getElementById('cfgTwilioFrom').value   = n.twilio_from || '';
+    toggleSection('smsSection', smsOn);
+    // Twilio status
+    if (cfg.has_twilio_token && n.twilio_sid) {
+      setBadge('statusTwilio', 'ok', '✓ Konfigureret');
+    } else if (n.twilio_sid) {
+      setBadge('statusTwilio', 'warn', '⚠ Mangler token');
+    } else {
+      setBadge('statusTwilio', 'none', 'Ikke sat op');
+    }
+
+    const emailOn = !!n.email_enabled;
+    document.getElementById('cfgEmailOn').checked    = emailOn;
+    document.getElementById('cfgResendApiKey').value = '';
+    // Resend status
+    if (cfg.has_resend_api_key) {
+      setBadge('statusResend', 'ok', '✓ API-nøgle gemt');
+    } else {
+      setBadge('statusResend', 'none', 'Ingen nøgle');
+    }
+    // Populate email recipients
+    const recipientsEl = document.getElementById('emailRecipients');
+    recipientsEl.innerHTML = '';
+    const emails = n.notify_emails || [];
+    emails.forEach(e => addEmailRecipient(e));
+    if (emails.length === 0) addEmailRecipient('');
+    toggleSection('emailSection', emailOn);
+
+    document.getElementById('modalOverlay').classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+
+  async function sendTest(type, btnId, label) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = true;
+    btn.textContent = 'Sender…';
+    try {
+      const res  = await fetch('/api/test/' + type, { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        showToast('Sendt ✓');
+      } else {
+        showToast('Fejl: ' + (data.error || 'ukendt fejl'));
+      }
+    } catch {
+      showToast('Fejl: kunne ikke sende');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  function closeSettings() {
+    document.getElementById('modalOverlay').classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  function overlayClick(e) {
+    if (e.target === document.getElementById('modalOverlay')) closeSettings();
+  }
+
+  async function saveSettings(e) {
+    e.preventDefault();
+    const payload = {
+      app_password:   document.getElementById('cfgAppPassword').value,
+      email:          document.getElementById('cfgEmail').value.trim(),
+      password:       document.getElementById('cfgPassword').value,
+      check_interval: parseInt(document.getElementById('cfgInterval').value),
+      notifications: {
+        ntfy_server:   document.getElementById('cfgNtfyServer').value.trim() || 'http://ntfy',
+        ntfy_topic:    document.getElementById('cfgNtfyOn').checked
+                         ? document.getElementById('cfgNtfyTopic').value.trim() : '',
+        sms_enabled:   document.getElementById('cfgSmsOn').checked,
+        phone_number:  document.getElementById('cfgPhoneNumber').value.trim(),
+        twilio_sid:    document.getElementById('cfgTwilioSid').value.trim(),
+        twilio_token:  document.getElementById('cfgTwilioToken').value,
+        twilio_from:   document.getElementById('cfgTwilioFrom').value.trim(),
+        email_enabled:   document.getElementById('cfgEmailOn').checked,
+        resend_api_key:  document.getElementById('cfgResendApiKey').value,
+        notify_emails:   [...document.querySelectorAll('#emailRecipients input')]
+                           .map(i => i.value.trim()).filter(Boolean),
+      }
+    };
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      closeSettings();
+      showToast('Indstillinger gemt ✓');
+    }
+  }
+
+  // ── Countdown ticker (every second) ──────────────────────────────────────
+  function fmtCountdown(ms) {
+    if (ms <= 0) return 'Nu…';
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (h > 0) return `${h}t ${String(m).padStart(2,'0')}m`;
+    if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
+    return `${s}s`;
+  }
+
+  setInterval(() => {
+    if (!_nextCheckAt) return;
+    const ms  = _nextCheckAt - Date.now();
+    const el  = document.getElementById('countdown');
+    if (!el) return;
+    el.textContent = ms > 0 ? `om ${fmtCountdown(ms)}` : 'Tjekker snart…';
+  }, 1000);
+
+  // ── Smart poller: opdager automatisk checks og reloader data ─────────────
+  let _lastKnownCheck = null;
+
+  async function pollState() {
+    try {
+      const s = await fetch('/api/state').then(r => r.json());
+
+      // Vis/skjul integreret scanning-tilstand i status-kortet
+      const card = document.getElementById('statusCard');
+      const btn  = document.getElementById('checkBtn');
+      const pill = document.getElementById('statusPill');
+      if (s.is_checking) {
+        card.classList.add('is-scanning');
+        btn.disabled = true;
+        btn.classList.add('loading');
+        btn.textContent = 'Tjekker…';
+        document.getElementById('statusDot').className = 'dot checking';
+        pill.className = 'status-pill checking';
+        document.getElementById('statusLabel').textContent = 'Scanner Waitly…';
+      } else {
+        card.classList.remove('is-scanning');
+        btn.disabled = false;
+        btn.classList.remove('loading');
+        btn.textContent = 'Tjek nu';
+      }
+
+      // Opdater countdown-timer
+      if (s.next_check) {
+        _nextCheckAt = new Date(s.next_check);
+        document.getElementById('nextCheckLine').style.display = '';
+      }
+
+      // Hvis last_check er ændret siden sidst → nyt check er færdigt, reload alt
+      if (s.last_check && s.last_check !== _lastKnownCheck) {
+        const wasKnown = _lastKnownCheck !== null;
+        _lastKnownCheck = s.last_check;
+        await Promise.all([loadOffers(), loadWaitlists(), loadState()]);
+        if (wasKnown && s.last_status === 'ok' && s.new_count > 0) {
+          document.getElementById('alertNew').classList.add('show');
+          document.getElementById('alertNewText').textContent =
+            `${s.new_count} nye boliger ud af ${s.total_count} i alt.`;
+        }
+      }
+    } catch { /* ignore netværksfejl */ }
+  }
+
+  setInterval(pollState, 10_000);
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  async function init() {
+    await Promise.all([loadState(), loadWaitlists(), loadOffers()]);
+    const s = await fetch('/api/state').then(r => r.json());
+    _lastKnownCheck = s.last_check;
+  }
+  init();
+</script>
+</body>
+</html>

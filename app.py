@@ -51,6 +51,17 @@ scheduler = BackgroundScheduler(
     },
 )
 
+# Containeren kører ofte på UTC – brug eksplicit dansk tid så viste tidspunkter
+# (last_check, næste tjek) stemmer med APScheduler og brugerens ur.
+try:
+    from zoneinfo import ZoneInfo
+    LOCAL_TZ = ZoneInfo('Europe/Copenhagen')
+except Exception:
+    LOCAL_TZ = None
+
+def _now():
+    return datetime.now(LOCAL_TZ)
+
 
 # ── Secret key (persisted so sessions survive restarts) ─────────────────────
 
@@ -147,7 +158,7 @@ def do_check() -> dict:
             notify_new_listings(new_listings, cfg)
 
         state.update({
-            'last_check':  datetime.now().isoformat(),
+            'last_check':  _now().isoformat(),
             'last_status': 'ok',
             'last_error':  None,
             'new_count':   len(new_listings),
@@ -158,7 +169,7 @@ def do_check() -> dict:
 
     except Exception as exc:
         state.update({
-            'last_check':  datetime.now().isoformat(),
+            'last_check':  _now().isoformat(),
             'last_status': 'error',
             'last_error':  str(exc),
         })
@@ -204,7 +215,7 @@ def schedule_checks(run_now: bool = False):
     interval = max(5, int(cfg.get('check_interval', 60)))
     jitter   = int(interval * 60 * 0.25)   # ±25 % i sekunder
 
-    first = datetime.now() + (timedelta(seconds=2) if run_now
+    first = _now() + (timedelta(seconds=2) if run_now
                               else timedelta(minutes=interval))
     scheduler.add_job(
         _run_scheduled_check,

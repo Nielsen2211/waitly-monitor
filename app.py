@@ -449,6 +449,21 @@ def api_check():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/resend-last', methods=['POST'])
+@api_login_required
+def api_resend_last():
+    """Gensend notifikationen for den senest opdagede bolig."""
+    listings = get_all_listings()
+    if not listings:
+        return jsonify({'ok': False, 'error': 'Ingen boliger i databasen endnu'}), 400
+    latest = max(listings, key=lambda x: x.get('first_seen') or '')
+    try:
+        notify_new_listings([latest], load_config())
+        return jsonify({'ok': True, 'title': latest.get('title', '')})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/state')
 @api_login_required
 def api_state():

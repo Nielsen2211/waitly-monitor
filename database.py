@@ -98,15 +98,21 @@ def save_listings(items: list[dict]) -> list[dict]:
 
 
 def sync_active_listings(current_ids: list[str]):
-    """Markér listings der ikke længere er på siden som udgåede, aktiver genkomne."""
+    """Markér listings der ikke længere er på siden som udgåede, aktiver genkomne.
+
+    Sikkerhedsspærre: hvis scrapet kom TOMT tilbage (0 boliger), er det næsten
+    altid en fejl (login/timeout på Waitlys side) – ikke at alle boliger er væk.
+    I det tilfælde rører vi IKKE is_active, så vi ikke fejlagtigt markerer alt
+    som udgået og skjuler reelle, aktive tilbud.
+    """
+    if not current_ids:
+        print('[db] Tomt scrape – springer is_active-opdatering over (undgår at markere alt som udgået).')
+        return
     conn = sqlite3.connect(DB_FILE)
     c    = conn.cursor()
-    if current_ids:
-        placeholders = ','.join('?' * len(current_ids))
-        c.execute(f'UPDATE listings SET is_active = 0 WHERE id NOT IN ({placeholders})', current_ids)
-        c.execute(f'UPDATE listings SET is_active = 1 WHERE id IN ({placeholders})', current_ids)
-    else:
-        c.execute('UPDATE listings SET is_active = 0')
+    placeholders = ','.join('?' * len(current_ids))
+    c.execute(f'UPDATE listings SET is_active = 0 WHERE id NOT IN ({placeholders})', current_ids)
+    c.execute(f'UPDATE listings SET is_active = 1 WHERE id IN ({placeholders})', current_ids)
     conn.commit()
     conn.close()
 

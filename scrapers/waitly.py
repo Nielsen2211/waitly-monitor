@@ -79,7 +79,13 @@ def scrape_all(config: dict) -> tuple[list[dict], list[dict]]:
             # ── Boliger til salg (tilbud) ──────────────────────────────────
             page.goto('https://my.waitly.dk/offers', timeout=30_000)
             page.wait_for_load_state('networkidle', timeout=15_000)
-            page.wait_for_timeout(2_500)
+            # Waitly er en Vue-SPA: vent på at bolig-kortene faktisk er tegnet,
+            # ikke bare at siden er loadet. Ellers læser vi en tom side.
+            try:
+                page.wait_for_selector('a[href^="/offers/"]', timeout=15_000)
+            except PWTimeout:
+                print(f'[{SOURCE_ID}] Ingen bolig-links dukkede op (måske reelt 0, eller login/side-fejl).')
+            page.wait_for_timeout(1_500)
             print(f'[{SOURCE_ID}] Scraper boliger. URL: {page.url}')
             listings = _scrape_listings(page)
             print(f'[{SOURCE_ID}] Boliger fundet: {len(listings)}')

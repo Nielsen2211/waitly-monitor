@@ -980,6 +980,13 @@
             <option value="360">Hver 6. time</option>
           </select>
         </div>
+        <div class="form-group">
+          <label for="cfgReminderDays">Deadline-påmindelse</label>
+          <input type="text" id="cfgReminderDays" placeholder="3, 1" inputmode="numeric">
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px">
+            Dage før svarfrist der sendes en påmindelse (kommasepareret). Tomt = ingen påmindelser.
+          </div>
+        </div>
       </div>
 
       <div class="form-section">
@@ -1373,6 +1380,7 @@
     document.getElementById('cfgEmail').value    = cfg.email || '';
     document.getElementById('cfgPassword').value = '';
     document.getElementById('cfgInterval').value = String(cfg.check_interval || 60);
+    document.getElementById('cfgReminderDays').value = (cfg.reminder_days || []).join(', ');
 
     // Waitly status
     if (cfg.email && cfg.has_password) {
@@ -1463,6 +1471,7 @@
       email:          document.getElementById('cfgEmail').value.trim(),
       password:       document.getElementById('cfgPassword').value,
       check_interval: parseInt(document.getElementById('cfgInterval').value),
+      reminder_days:  document.getElementById('cfgReminderDays').value,
       notifications: {
         ntfy_server:   document.getElementById('cfgNtfyServer').value.trim() || 'http://ntfy',
         ntfy_topic:    document.getElementById('cfgNtfyOn').checked

@@ -10,8 +10,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 from flask import (Flask, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
 
-from database import get_all_listings, get_all_waitlists, init_db, save_listings, save_waitlists, sync_active_listings
-from notifier import notify_new_listings
+import re
+
+from database import (get_all_listings, get_all_waitlists, init_db, save_listings,
+                      save_waitlists, sync_active_listings, set_reminded)
+from notifier import notify_new_listings, notify_deadline_reminder
 from scrapers import run_all
 
 app = Flask(__name__)
@@ -26,6 +29,7 @@ DEFAULT_CONFIG = {
     'password': '',
     'app_password': '',
     'check_interval': 60,
+    'reminder_days': [3, 1],   # påmind X dage før deadline (kan være flere)
     'notifications': {
         'ntfy_server': 'http://ntfy',   # intern Docker-URL; ntfy.sh → https://ntfy.sh
         'ntfy_topic': '',
@@ -135,6 +139,54 @@ def write_state(state: dict):
         json.dump(state, f, ensure_ascii=False)
 
 
+# ── Deadline-påmindelser ─────────────────────────────────────────────────────
+
+_MONTHS_DK = {
+    'januar': 1, 'februar': 2, 'marts': 3, 'april': 4, 'maj': 5, 'juni': 6,
+    'juli': 7, 'august': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12,
+}
+
+def _parse_deadline(s: str):
+    m = re.search(r'(\d+)\.\s+(\w+)\s+(\d{4})(?:\s+kl[.:]\s*(\d{1,2})[.:](\d{2}))?', s or '', re.I)
+    if not m:
+        return None
+    mon = _MONTHS_DK.get(m.group(2).lower())
+    if not mon:
+        return None
+    try:
+        return datetime(int(m.group(3)), mon, int(m.group(1)),
+                        int(m.group(4) or 23), int(m.group(5) or 59), tzinfo=LOCAL_TZ)
+    except ValueError:
+        return None
+
+def _send_deadline_reminders(cfg: dict):
+    """Påmind for aktive boliger når svarfristen nærmer sig – én gang pr. tærskel."""
+    try:
+        thresholds = sorted({int(x) for x in cfg.get('reminder_days', [3, 1])}, reverse=True)
+    except (TypeError, ValueError):
+        thresholds = [3, 1]
+    if not thresholds:
+        return
+    now = _now()
+    for item in get_all_listings():
+        if not item.get('is_active'):
+            continue
+        dl = _parse_deadline(item.get('deadline', ''))
+        if not dl:
+            continue
+        days_left = (dl - now).days
+        if days_left < 0:
+            continue
+        already = {x for x in (item.get('reminded') or '').split(',') if x}
+        for t in thresholds:
+            if days_left <= t and str(t) not in already:
+                notify_deadline_reminder(item, days_left, cfg)
+                already.add(str(t))
+                set_reminded(item['id'], ','.join(sorted(already, key=int)))
+                print(f'[reminder] {item["title"][:40]} → deadline om {days_left} dage')
+                break
+
+
 # ── Core check logic ─────────────────────────────────────────────────────────
 
 def do_check() -> dict:
@@ -156,6 +208,9 @@ def do_check() -> dict:
 
         if new_listings:
             notify_new_listings(new_listings, cfg)
+
+        # Påmind om boliger hvor svarfristen nærmer sig
+        _send_deadline_reminders(cfg)
 
         state.update({
             'last_check':  _now().isoformat(),
@@ -299,6 +354,15 @@ def api_post_config():
     for key in ('email', 'check_interval'):
         if key in data:
             cfg[key] = data[key]
+
+    if 'reminder_days' in data:
+        raw = data['reminder_days']
+        if isinstance(raw, str):
+            raw = [p.strip() for p in raw.split(',')]
+        try:
+            cfg['reminder_days'] = sorted({int(x) for x in raw if str(x).strip()}, reverse=True)
+        except (TypeError, ValueError):
+            pass
     if data.get('password'):
         cfg['password'] = data['password']
     if data.get('app_password'):

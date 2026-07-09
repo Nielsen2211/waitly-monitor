@@ -84,6 +84,63 @@ def notify_new_listings(listings: list[dict], config: dict):
                 print(f'[notifier] sms error: {e}')
 
 
+def notify_deadline_reminder(item: dict, days_left: int, config: dict):
+    """Send en påmindelse om at en boligs svarfrist nærmer sig."""
+    notif = config.get('notifications', {})
+    when = ('i dag' if days_left <= 0
+            else 'i morgen' if days_left == 1
+            else f'om {days_left} dage')
+    title = f'Deadline {when}: {item["title"]}'
+
+    ntfy_topic  = notif.get('ntfy_topic', '').strip()
+    ntfy_server = notif.get('ntfy_server', 'http://ntfy').rstrip('/')
+    if ntfy_topic:
+        try:
+            requests.post(
+                f'{ntfy_server}',
+                json={
+                    'topic':    ntfy_topic,
+                    'title':    f'⏰ {title}',
+                    'message':  '\n'.join(filter(None, [
+                        item.get('address', ''),
+                        f'Svarfrist: {item.get("deadline", "")}',
+                        'Husk at svare i tide!',
+                    ])),
+                    'priority': 5,
+                    'tags':     ['alarm_clock'],
+                    'click':    item['url'],
+                    'actions':  [{'action': 'view', 'label': 'Se bolig', 'url': item['url']}],
+                },
+                timeout=10,
+            )
+        except Exception as e:
+            print(f'[notifier] reminder ntfy error: {e}')
+
+    recipients = notif.get('notify_emails') or []
+    if notif.get('email_enabled') and notif.get('resend_api_key') and recipients:
+        try:
+            _send_email_resend(
+                api_key=notif['resend_api_key'],
+                to_addrs=recipients,
+                subject=f'⏰ {title}',
+                html_body=_build_email_html(item),
+                text_body=_build_email_text(item),
+            )
+        except Exception as e:
+            print(f'[notifier] reminder email error: {e}')
+
+    if (notif.get('sms_enabled') and notif.get('twilio_sid') and notif.get('twilio_token')
+            and notif.get('twilio_from') and notif.get('phone_number')):
+        try:
+            _send_sms(
+                to=notif['phone_number'], from_=notif['twilio_from'],
+                sid=notif['twilio_sid'], token=notif['twilio_token'],
+                body=f"Deadline {when}: {item['title']}\nSvarfrist: {item['deadline']}\n{item['url']}",
+            )
+        except Exception as e:
+            print(f'[notifier] reminder sms error: {e}')
+
+
 def _send_sms(to: str, from_: str, sid: str, token: str, body: str):
     requests.post(
         f'https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json',

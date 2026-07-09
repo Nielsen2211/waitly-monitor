@@ -34,7 +34,7 @@ def init_db():
     ''')
     for col, typ in [('is_active','INTEGER DEFAULT 1'), ('price','TEXT'),
                      ('recurring_price','TEXT'), ('rooms','TEXT'),
-                     ('size','TEXT'), ('floor','TEXT')]:
+                     ('size','TEXT'), ('floor','TEXT'), ('reminded','TEXT')]:
         try:
             c.execute(f'ALTER TABLE listings ADD COLUMN {col} {typ}')
         except Exception:
@@ -113,6 +113,15 @@ def sync_active_listings(current_ids: list[str]):
     placeholders = ','.join('?' * len(current_ids))
     c.execute(f'UPDATE listings SET is_active = 0 WHERE id NOT IN ({placeholders})', current_ids)
     c.execute(f'UPDATE listings SET is_active = 1 WHERE id IN ({placeholders})', current_ids)
+    conn.commit()
+    conn.close()
+
+
+def set_reminded(listing_id: str, reminded: str):
+    """Gem hvilke deadline-påmindelser der er sendt for en bolig (kommasepareret)."""
+    conn = sqlite3.connect(DB_FILE)
+    c    = conn.cursor()
+    c.execute('UPDATE listings SET reminded = ? WHERE id = ?', (reminded, listing_id))
     conn.commit()
     conn.close()
 
